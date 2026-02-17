@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-02-17T11:53:55.796721",
+  "generated_at": "2026-02-17T12:01:12.103411",
   "output_dir": "/home/kinematics/Desktop/Andrew/actual_midline_extraction/root_midline_extraction/output",
   "file_inventory": {
     "checkpoints": {
@@ -81,6 +81,7 @@
     "checkpoint_epoch": 76,
     "num_samples": 15,
     "num_visualizations": 15,
+    "qc_method": "rightmost midline point",
     "dice": {
       "mean": 0.2856,
       "std": 0.1091,
@@ -88,90 +89,87 @@
       "max": 0.5031
     },
     "qc_distance_px": {
-      "mean": 448.68,
-      "std": 10.18,
-      "min": 412.32,
-      "max": 456.65,
-      "median": 449.44
-    },
-    "qc_mse": {
-      "mean": 7.2e-05
+      "mean": 11.01,
+      "std": 10.46,
+      "min": 1.41,
+      "max": 38.63,
+      "median": 8.49
     },
     "per_sample": [
       {
         "filename": "Basler_acA4024-29um__25147414__20251002_175952724_0000",
         "dice": 0.3953000009059906,
-        "qc_dist_px": 451.85
+        "qc_dist_px": 8.49
       },
       {
         "filename": "Basler_acA4024-29um__25147410__20250928_161453877_0000",
         "dice": 0.34599998593330383,
-        "qc_dist_px": 448.89
+        "qc_dist_px": 11.31
       },
       {
         "filename": "Basler_acA4024-29um__25147410__20251001_172228667_0000",
         "dice": 0.241799995303154,
-        "qc_dist_px": 449.44
+        "qc_dist_px": 1.41
       },
       {
         "filename": "Basler_acA4024-29um__25147410__20250819_171613781_0000",
         "dice": 0.24269999563694,
-        "qc_dist_px": 449.58
+        "qc_dist_px": 2.24
       },
       {
         "filename": "Basler_acA4024-29um__25147410__20250928_171956176_0000",
         "dice": 0.38190001249313354,
-        "qc_dist_px": 454.81
+        "qc_dist_px": 9.22
       },
       {
         "filename": "Basler_acA4024-29um__25147414__20250928_163739916_0000",
         "dice": 0.41819998621940613,
-        "qc_dist_px": 449.03
+        "qc_dist_px": 9.85
       },
       {
         "filename": "Basler_acA4024-29um__25147414__20250928_161541133_0000",
         "dice": 0.5030999779701233,
-        "qc_dist_px": 448.89
+        "qc_dist_px": 7.62
       },
       {
         "filename": "Basler_acA4024-29um__25147410__20251001_153055410_0000",
         "dice": 0.2734000086784363,
-        "qc_dist_px": 448.26
+        "qc_dist_px": 8.54
       },
       {
         "filename": "Basler_acA4024-29um__25147410__20250806_180604377_0000",
         "dice": 0.19519999623298645,
-        "qc_dist_px": 456.65
+        "qc_dist_px": 4.0
       },
       {
         "filename": "Basler_acA4024-29um__25147410__20260108_150524976_0000",
         "dice": 0.14219999313354492,
-        "qc_dist_px": 448.89
+        "qc_dist_px": 5.83
       },
       {
         "filename": "Basler_acA4024-29um__25147410__20250805_162012127_0000",
         "dice": 0.26100000739097595,
-        "qc_dist_px": 412.32
+        "qc_dist_px": 34.21
       },
       {
         "filename": "Basler_acA4024-29um__25147414__20251001_153057706_0000",
         "dice": 0.25429999828338623,
-        "qc_dist_px": 449.89
+        "qc_dist_px": 5.0
       },
       {
         "filename": "Basler_acA4024-29um__25147414__20250811_104229606_0000",
         "dice": 0.26420000195503235,
-        "qc_dist_px": 456.1
+        "qc_dist_px": 13.04
       },
       {
         "filename": "Basler_acA4024-29um__25147410__20250813_210933297_0000",
         "dice": 0.05480000004172325,
-        "qc_dist_px": 456.65
+        "qc_dist_px": 38.63
       },
       {
         "filename": "Basler_acA4024-29um__25147414__20250811_114438195_0000",
         "dice": 0.30979999899864197,
-        "qc_dist_px": 448.89
+        "qc_dist_px": 5.83
       }
     ]
   }
