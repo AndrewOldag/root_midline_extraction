@@ -1,0 +1,83 @@
+{
+  "generated_at": "2026-02-17T11:06:28.004869",
+  "output_dir": "/home/kinematics/Desktop/Andrew/actual_midline_extraction/root_midline_extraction/output",
+  "file_inventory": {
+    "checkpoints": {
+      "exists": true,
+      "file_count": 6,
+      "total_size_mb": 1896.0
+    },
+    "logs": {
+      "exists": true,
+      "file_count": 2,
+      "total_size_mb": 0.1
+    },
+    "predictions": {
+      "exists": true,
+      "file_count": 0,
+      "total_size_mb": 0.0
+    }
+  },
+  "checkpoints": [
+    {
+      "file": "best_model.pth",
+      "size_mb": 316.0,
+      "epoch": 76,
+      "val_loss": 0.370157
+    },
+    {
+      "file": "checkpoint_epoch_100.pth",
+      "size_mb": 316.0,
+      "epoch": 99,
+      "val_loss": 0.371974
+    },
+    {
+      "file": "checkpoint_epoch_25.pth",
+      "size_mb": 316.0,
+      "epoch": 24,
+      "val_loss": 0.403482
+    },
+    {
+      "file": "checkpoint_epoch_50.pth",
+      "size_mb": 316.0,
+      "epoch": 49,
+      "val_loss": 0.386618
+    },
+    {
+      "file": "checkpoint_epoch_75.pth",
+      "size_mb": 316.0,
+      "epoch": 74,
+      "val_loss": 0.386119
+    },
+    {
+      "file": "final_model.pth",
+      "size_mb": 316.0,
+      "epoch": 106,
+      "val_loss": 0.380206
+    }
+  ],
+  "training": {
+    "total_epochs_logged": 107,
+    "final_epoch": {
+      "epoch": "107",
+      "train_total": "0.364063",
+      "val_total": "0.380206",
+      "train_midline": "0.364009",
+      "train_qc": "0.000054",
+      "val_midline": "0.380145",
+      "val_qc": "0.000061",
+      "lr": "0.00044569"
+    },
+    "best_val_epoch": {
+      "epoch": "77",
+      "val_total": "0.370157",
+      "train_total": "0.380483"
+    },
+    "configured_max_epochs": 200,
+    "early_stopped": true
+  },
+  "predictions": {
+    "count": 0,
+    "samples": []
+  }
+}
