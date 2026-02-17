@@ -1,31 +1,179 @@
 """
-Generate a lightweight summary of the output/ folder for remote review.
+Generate a lightweight summary of training results for remote review.
 
-Produces output/summary/ containing:
-    - summary_report.json   (checkpoint metadata, training stats, per-prediction info)
-    - training_curves.png   (copied from logs)
-    - training_log.csv      (copied from logs)
-    - prediction_montage.png (grid of downscaled overlay images)
-    - thumbnails/           (individual downscaled overlay PNGs)
+Loads the best model, runs evaluation on the validation set, generates
+prediction visualizations, and packages everything into summary/ at
+the project root -- ready to git add, commit, and push.
+
+Produces summary/ containing:
+    - summary_report.json    (checkpoint metadata, training stats, eval metrics)
+    - training_curves.png    (copied from logs)
+    - training_log.csv       (copied from logs)
+    - predictions/           (prediction overlay PNGs from evaluation)
+    - prediction_montage.png (grid of downscaled prediction images)
+    - thumbnails/            (individual downscaled prediction PNGs)
 
 Usage:
     python summarize_output.py
+    python summarize_output.py --max-vis 20       # more prediction images
+    python summarize_output.py --skip-eval         # skip evaluation, just summarize existing files
 """
 
+import argparse
 import csv
 import json
 import math
 import shutil
 from datetime import datetime
 from pathlib import Path
+from typing import Dict, List, Optional
 
+import numpy as np
+import torch
 from PIL import Image
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 import config
+import utils
+from data_loader import create_dataloaders
+from evaluate import dice_coefficient, qc_distance_error, qc_mse
+from model import build_model
 
-SUMMARY_DIR = config.OUTPUT_DIR / "summary"
+SUMMARY_DIR = config.PROJECT_ROOT / "summary"
 THUMBNAIL_DIR = SUMMARY_DIR / "thumbnails"
-THUMBNAIL_WIDTH = 400  # pixels -- target width for each thumbnail
+PREDICTIONS_SAVE_DIR = SUMMARY_DIR / "predictions"
+THUMBNAIL_WIDTH = 400
+
+
+# =============================================================================
+# Evaluation  (generates prediction images + metrics)
+# =============================================================================
+
+
+@torch.no_grad()
+def run_evaluation(
+    max_vis: int = 20,
+) -> Dict:
+    """
+    Load best model, evaluate on validation set, save prediction images
+    directly into summary/predictions/.
+
+    Returns dict with per-sample metrics and summary statistics.
+    """
+    device = utils.get_device()
+
+    # Load data
+    print("  Loading validation data...")
+    _, val_loader = create_dataloaders()
+    print(f"  Validation samples: {len(val_loader.dataset)}")
+
+    # Find best checkpoint
+    ckpt_path = config.CHECKPOINT_DIR / "best_model.pth"
+    if not ckpt_path.exists():
+        pth_files = sorted(config.CHECKPOINT_DIR.glob("*.pth"))
+        if not pth_files:
+            return {"error": "No checkpoint found"}
+        ckpt_path = pth_files[-1]
+
+    print(f"  Loading model from {ckpt_path.name}...")
+    model = build_model(device)
+    checkpoint = torch.load(str(ckpt_path), map_location=device, weights_only=False)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
+    ckpt_epoch = checkpoint.get("epoch", "?")
+    ckpt_val_loss = checkpoint.get("val_loss", "?")
+    print(f"  Checkpoint: epoch {ckpt_epoch}, val_loss={ckpt_val_loss}")
+
+    # Evaluate + generate visualisation images
+    PREDICTIONS_SAVE_DIR.mkdir(parents=True, exist_ok=True)
+
+    all_dice = []
+    all_qc_dist = []
+    all_qc_mse = []
+    all_filenames = []
+    vis_count = 0
+
+    for batch in tqdm(val_loader, desc="  Evaluating"):
+        images = batch["image"].to(device)
+        pred = model(images)
+
+        midline_preds = torch.sigmoid(pred["midline"]).cpu().numpy()
+        qc_preds = torch.sigmoid(pred["qc"]).cpu().numpy()
+        midline_targets = batch["midline_mask"].numpy()
+        qc_targets = batch["qc_heatmap"].numpy()
+
+        for i in range(images.size(0)):
+            mp = midline_preds[i, 0]
+            mt = midline_targets[i, 0]
+            qp = qc_preds[i, 0]
+            qt = qc_targets[i, 0]
+            fname = batch["filename"][i]
+
+            d = dice_coefficient(mp, mt)
+            dist = qc_distance_error(qp, qt)
+            mse = qc_mse(qp, qt)
+
+            all_dice.append(d)
+            all_qc_dist.append(dist)
+            all_qc_mse.append(mse)
+            all_filenames.append(fname)
+
+            if vis_count < max_vis:
+                img_np = batch["image"][i, 0].numpy()
+                utils.plot_prediction_overlay(
+                    image=img_np,
+                    pred_midline=mp,
+                    pred_qc=qp,
+                    gt_midline=mt,
+                    gt_qc=qt,
+                    title=f"{fname} | Dice={d:.3f} | QC dist={dist:.1f}px",
+                    save_path=str(PREDICTIONS_SAVE_DIR / f"{fname}_prediction.png"),
+                )
+                vis_count += 1
+
+    dice_arr = np.array(all_dice)
+    dist_arr = np.array(all_qc_dist)
+    mse_arr = np.array(all_qc_mse)
+
+    metrics = {
+        "checkpoint_used": ckpt_path.name,
+        "checkpoint_epoch": ckpt_epoch,
+        "num_samples": len(all_dice),
+        "num_visualizations": vis_count,
+        "dice": {
+            "mean": round(float(dice_arr.mean()), 4),
+            "std": round(float(dice_arr.std()), 4),
+            "min": round(float(dice_arr.min()), 4),
+            "max": round(float(dice_arr.max()), 4),
+        },
+        "qc_distance_px": {
+            "mean": round(float(dist_arr.mean()), 2),
+            "std": round(float(dist_arr.std()), 2),
+            "min": round(float(dist_arr.min()), 2),
+            "max": round(float(dist_arr.max()), 2),
+            "median": round(float(np.median(dist_arr)), 2),
+        },
+        "qc_mse": {
+            "mean": round(float(mse_arr.mean()), 6),
+        },
+        "per_sample": [
+            {
+                "filename": fn,
+                "dice": round(d, 4),
+                "qc_dist_px": round(qd, 2),
+            }
+            for fn, d, qd in zip(all_filenames, all_dice, all_qc_dist)
+        ],
+    }
+
+    print(f"  Dice:  mean={metrics['dice']['mean']:.4f}  "
+          f"min={metrics['dice']['min']:.4f}  max={metrics['dice']['max']:.4f}")
+    print(f"  QC dist: mean={metrics['qc_distance_px']['mean']:.1f}px  "
+          f"median={metrics['qc_distance_px']['median']:.1f}px")
+    print(f"  Saved {vis_count} prediction images")
+
+    return metrics
 
 
 # =============================================================================
@@ -35,8 +183,6 @@ THUMBNAIL_WIDTH = 400  # pixels -- target width for each thumbnail
 
 def extract_checkpoint_metadata() -> list:
     """Read epoch and val_loss from each .pth checkpoint without loading weights."""
-    import torch
-
     checkpoint_dir = config.CHECKPOINT_DIR
     if not checkpoint_dir.exists():
         return []
@@ -82,7 +228,6 @@ def summarize_training_log() -> dict:
 
     last = rows[-1]
     total_epochs = len(rows)
-
     best_val_row = min(rows, key=lambda r: float(r.get("val_total", "inf")))
 
     return {
@@ -104,43 +249,6 @@ def summarize_training_log() -> dict:
         },
         "configured_max_epochs": config.EPOCHS,
         "early_stopped": total_epochs < config.EPOCHS,
-    }
-
-
-# =============================================================================
-# Prediction stats
-# =============================================================================
-
-
-def collect_prediction_stats() -> dict:
-    """Collect stats from all _coords.json files in predictions/."""
-    pred_dir = config.PREDICTIONS_DIR
-    if not pred_dir.exists():
-        return {"error": "predictions/ directory not found"}
-
-    json_files = sorted(pred_dir.glob("*_coords.json"))
-    if not json_files:
-        return {"count": 0, "samples": []}
-
-    samples = []
-    for jf in json_files:
-        with open(jf) as f:
-            data = json.load(f)
-        samples.append({
-            "filename": data.get("filename", jf.stem),
-            "qc_point": data.get("qc_point"),
-            "midline_num_points": data.get("midline_num_points", 0),
-            "crop_bbox": data.get("crop_bbox"),
-        })
-
-    midline_counts = [s["midline_num_points"] for s in samples]
-
-    return {
-        "count": len(samples),
-        "midline_points_min": min(midline_counts) if midline_counts else None,
-        "midline_points_max": max(midline_counts) if midline_counts else None,
-        "midline_points_mean": round(sum(midline_counts) / len(midline_counts), 1) if midline_counts else None,
-        "samples": samples,
     }
 
 
@@ -173,25 +281,24 @@ def build_file_inventory() -> dict:
 
 
 def generate_thumbnails() -> list:
-    """Downscale all _overlay.png images and save to thumbnails/."""
-    pred_dir = config.PREDICTIONS_DIR
-    if not pred_dir.exists():
+    """Downscale prediction images from summary/predictions/ into thumbnails/."""
+    if not PREDICTIONS_SAVE_DIR.exists():
         return []
 
-    overlay_files = sorted(pred_dir.glob("*_overlay.png"))
-    if not overlay_files:
+    image_files = sorted(PREDICTIONS_SAVE_DIR.glob("*.png"))
+    if not image_files:
         return []
 
     THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
     thumb_paths = []
 
-    for overlay in overlay_files:
-        img = Image.open(overlay)
+    for img_path in image_files:
+        img = Image.open(img_path)
         ratio = THUMBNAIL_WIDTH / img.width
         new_h = int(img.height * ratio)
         thumb = img.resize((THUMBNAIL_WIDTH, new_h), Image.LANCZOS)
 
-        out_path = THUMBNAIL_DIR / overlay.name
+        out_path = THUMBNAIL_DIR / img_path.name
         thumb.save(str(out_path), optimize=True)
         thumb_paths.append(out_path)
 
@@ -249,7 +356,7 @@ def copy_log_files() -> list:
 # =============================================================================
 
 
-def main() -> None:
+def main(max_vis: int = 20, skip_eval: bool = False) -> None:
     print("=" * 60)
     print("Output Summary Generator")
     print("=" * 60)
@@ -258,10 +365,26 @@ def main() -> None:
         print(f"ERROR: output directory not found at {config.OUTPUT_DIR}")
         return
 
+    # Clean previous summary and recreate
+    if SUMMARY_DIR.exists():
+        shutil.rmtree(SUMMARY_DIR)
     SUMMARY_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 1. Checkpoint metadata
-    print("\n[1/5] Extracting checkpoint metadata...")
+    # 1. Run evaluation (model + data -> prediction images + metrics)
+    eval_metrics = None
+    if not skip_eval:
+        print("\n[1/5] Running evaluation on validation set...")
+        try:
+            eval_metrics = run_evaluation(max_vis=max_vis)
+        except Exception as exc:
+            print(f"  Evaluation failed: {exc}")
+            print("  Continuing with remaining summary steps...")
+            eval_metrics = {"error": str(exc)}
+    else:
+        print("\n[1/5] Skipping evaluation (--skip-eval)")
+
+    # 2. Checkpoint metadata
+    print("\n[2/5] Extracting checkpoint metadata...")
     checkpoint_meta = extract_checkpoint_metadata()
     if checkpoint_meta:
         for m in checkpoint_meta:
@@ -270,8 +393,8 @@ def main() -> None:
     else:
         print("  No checkpoints found.")
 
-    # 2. Training log summary
-    print("\n[2/5] Summarizing training log...")
+    # 3. Training log summary
+    print("\n[3/5] Summarizing training log...")
     training_summary = summarize_training_log()
     if "error" not in training_summary:
         print(f"  Epochs logged: {training_summary['total_epochs_logged']}")
@@ -281,26 +404,14 @@ def main() -> None:
     else:
         print(f"  {training_summary['error']}")
 
-    # 3. Prediction stats
-    print("\n[3/5] Collecting prediction stats...")
-    prediction_stats = collect_prediction_stats()
-    if "error" not in prediction_stats:
-        print(f"  Predictions: {prediction_stats['count']}")
-        if prediction_stats["count"] > 0:
-            print(f"  Midline points: min={prediction_stats['midline_points_min']}, "
-                  f"max={prediction_stats['midline_points_max']}, "
-                  f"mean={prediction_stats['midline_points_mean']}")
-    else:
-        print(f"  {prediction_stats['error']}")
-
-    # 4. Thumbnails and montage
+    # 4. Thumbnails and montage from prediction images
     print("\n[4/5] Generating thumbnails and montage...")
     thumb_paths = generate_thumbnails()
     if thumb_paths:
         print(f"  Created {len(thumb_paths)} thumbnails ({THUMBNAIL_WIDTH}px wide)")
         build_montage(thumb_paths)
     else:
-        print("  No overlay images found to thumbnail.")
+        print("  No prediction images to thumbnail.")
 
     # 5. Copy log files and write report
     print("\n[5/5] Copying log files and writing summary report...")
@@ -316,7 +427,7 @@ def main() -> None:
         "file_inventory": inventory,
         "checkpoints": checkpoint_meta,
         "training": training_summary,
-        "predictions": prediction_stats,
+        "evaluation": eval_metrics,
     }
 
     report_path = SUMMARY_DIR / "summary_report.json"
@@ -332,8 +443,21 @@ def main() -> None:
     print(f"Summary folder: {SUMMARY_DIR}")
     print(f"Total size:     {summary_bytes / (1024 * 1024):.2f} MB")
     print(f"{'=' * 60}")
-    print("\nDone! You can now git add, commit, and push output/summary/")
+    print("\nDone! You can now:")
+    print(f"  git add summary/")
+    print(f"  git commit -m \"Update training summary\"")
+    print(f"  git push")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Generate training summary for remote review")
+    parser.add_argument(
+        "--max-vis", type=int, default=20,
+        help="Max number of prediction images to generate (default: 20)",
+    )
+    parser.add_argument(
+        "--skip-eval", action="store_true",
+        help="Skip evaluation; only summarize existing log/checkpoint files",
+    )
+    args = parser.parse_args()
+    main(max_vis=args.max_vis, skip_eval=args.skip_eval)
