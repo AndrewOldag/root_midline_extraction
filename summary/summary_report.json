@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-02-17T11:06:28.004869",
+  "generated_at": "2026-02-17T11:31:11.435226",
   "output_dir": "/home/kinematics/Desktop/Andrew/actual_midline_extraction/root_midline_extraction/output",
   "file_inventory": {
     "checkpoints": {
@@ -14,8 +14,8 @@
     },
     "predictions": {
       "exists": true,
-      "file_count": 0,
-      "total_size_mb": 0.0
+      "file_count": 10,
+      "total_size_mb": 13.9
     }
   },
   "checkpoints": [
@@ -76,8 +76,103 @@
     "configured_max_epochs": 200,
     "early_stopped": true
   },
-  "predictions": {
-    "count": 0,
-    "samples": []
+  "evaluation": {
+    "checkpoint_used": "best_model.pth",
+    "checkpoint_epoch": 76,
+    "num_samples": 15,
+    "num_visualizations": 15,
+    "dice": {
+      "mean": 0.2856,
+      "std": 0.1091,
+      "min": 0.0548,
+      "max": 0.5031
+    },
+    "qc_distance_px": {
+      "mean": 448.68,
+      "std": 10.18,
+      "min": 412.32,
+      "max": 456.65,
+      "median": 449.44
+    },
+    "qc_mse": {
+      "mean": 7.2e-05
+    },
+    "per_sample": [
+      {
+        "filename": "Basler_acA4024-29um__25147414__20251002_175952724_0000",
+        "dice": 0.3953000009059906,
+        "qc_dist_px": 451.85
+      },
+      {
+        "filename": "Basler_acA4024-29um__25147410__20250928_161453877_0000",
+        "dice": 0.34599998593330383,
+        "qc_dist_px": 448.89
+      },
+      {
+        "filename": "Basler_acA4024-29um__25147410__20251001_172228667_0000",
+        "dice": 0.241799995303154,
+        "qc_dist_px": 449.44
+      },
+      {
+        "filename": "Basler_acA4024-29um__25147410__20250819_171613781_0000",
+        "dice": 0.24269999563694,
+        "qc_dist_px": 449.58
+      },
+      {
+        "filename": "Basler_acA4024-29um__25147410__20250928_171956176_0000",
+        "dice": 0.38190001249313354,
+        "qc_dist_px": 454.81
+      },
+      {
+        "filename": "Basler_acA4024-29um__25147414__20250928_163739916_0000",
+        "dice": 0.41819998621940613,
+        "qc_dist_px": 449.03
+      },
+      {
+        "filename": "Basler_acA4024-29um__25147414__20250928_161541133_0000",
+        "dice": 0.5030999779701233,
+        "qc_dist_px": 448.89
+      },
+      {
+        "filename": "Basler_acA4024-29um__25147410__20251001_153055410_0000",
+        "dice": 0.2734000086784363,
+        "qc_dist_px": 448.26
+      },
+      {
+        "filename": "Basler_acA4024-29um__25147410__20250806_180604377_0000",
+        "dice": 0.19519999623298645,
+        "qc_dist_px": 456.65
+      },
+      {
+        "filename": "Basler_acA4024-29um__25147410__20260108_150524976_0000",
+        "dice": 0.14219999313354492,
+        "qc_dist_px": 448.89
+      },
+      {
+        "filename": "Basler_acA4024-29um__25147410__20250805_162012127_0000",
+        "dice": 0.26100000739097595,
+        "qc_dist_px": 412.32
+      },
+      {
+        "filename": "Basler_acA4024-29um__25147414__20251001_153057706_0000",
+        "dice": 0.25429999828338623,
+        "qc_dist_px": 449.89
+      },
+      {
+        "filename": "Basler_acA4024-29um__25147414__20250811_104229606_0000",
+        "dice": 0.26420000195503235,
+        "qc_dist_px": 456.1
+      },
+      {
+        "filename": "Basler_acA4024-29um__25147410__20250813_210933297_0000",
+        "dice": 0.05480000004172325,
+        "qc_dist_px": 456.65
+      },
+      {
+        "filename": "Basler_acA4024-29um__25147414__20250811_114438195_0000",
+        "dice": 0.30979999899864197,
+        "qc_dist_px": 448.89
+      }
+    ]
   }
 }
