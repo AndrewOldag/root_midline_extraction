@@ -191,20 +191,44 @@ def plot_sample(
         plt.show()
 
 
-def _overlay_qc_heatmap(ax, heatmap: np.ndarray, threshold: float = 0.1) -> None:
+def derive_qc_from_midline(
+    midline: np.ndarray, threshold: float = 0.5
+) -> Optional[Tuple[int, int]]:
     """
-    Overlay a QC heatmap on an axes, masking out low values so only
-    the actual peak region is visible (avoids the red-haze problem).
-    Also marks the peak location with a crosshair.
-    """
-    masked = np.ma.masked_where(heatmap < threshold, heatmap)
-    ax.imshow(masked, cmap="hot", alpha=0.65, vmin=0, vmax=1)
+    Derive the QC (quiescent centre) location as the rightmost point
+    of the predicted midline.  The root tip (where the QC sits) is the
+    rightmost end of the midline in these images.
 
-    peak_yx = np.unravel_index(np.argmax(heatmap), heatmap.shape)
-    ax.plot(
-        peak_yx[1], peak_yx[0], "c+",
-        markersize=14, markeredgewidth=2.5,
-    )
+    Args:
+        midline: Midline mask or probability map (H, W).
+        threshold: Binarisation threshold for the probability map.
+
+    Returns:
+        (x, y) of the rightmost midline pixel, or None if the midline
+        is empty after thresholding.
+    """
+    binary = (midline > threshold).astype(np.uint8)
+    ys, xs = np.where(binary > 0)
+    if len(xs) == 0:
+        return None
+
+    rightmost_idx = np.argmax(xs)
+    return (int(xs[rightmost_idx]), int(ys[rightmost_idx]))
+
+
+def _plot_midline_and_qc(
+    ax, image: np.ndarray, midline: np.ndarray,
+    qc_point: Optional[Tuple[int, int]], threshold: float = 0.3,
+) -> None:
+    """Overlay a midline mask and QC marker on an axes."""
+    ax.imshow(image, cmap="gray")
+    midline_masked = np.ma.masked_where(midline < threshold, midline)
+    ax.imshow(midline_masked, cmap="Greens", alpha=0.6, vmin=0, vmax=1)
+    if qc_point is not None:
+        ax.plot(
+            qc_point[0], qc_point[1], "r*",
+            markersize=16, markeredgecolor="white", markeredgewidth=0.8,
+        )
 
 
 def plot_prediction_overlay(
@@ -219,39 +243,46 @@ def plot_prediction_overlay(
     """
     Plot prediction overlaid on the original image.
 
+    The QC point is derived as the rightmost point of the predicted
+    midline (the root tip).
+
     Args:
         image: Grayscale image (H, W)
         pred_midline: Predicted midline mask (H, W), values in [0, 1]
-        pred_qc: Predicted QC heatmap (H, W), values in [0, 1]
+        pred_qc: Predicted QC heatmap (H, W), values in [0, 1] (unused,
+            kept for API compatibility)
         gt_midline: Optional ground truth midline mask
         gt_qc: Optional ground truth QC heatmap
         title: Optional title
         save_path: If provided, save to this path
     """
-    n_cols = 2 if gt_midline is None else 3
-    fig, axes = plt.subplots(1, n_cols, figsize=(6 * n_cols, 6))
+    has_gt = gt_midline is not None
+    n_cols = 2 if has_gt else 1
+    fig, axes = plt.subplots(1, n_cols, figsize=(7 * n_cols, 7))
+    if n_cols == 1:
+        axes = [axes]
 
-    # Predicted midline overlay
-    axes[0].imshow(image, cmap="gray")
-    midline_masked = np.ma.masked_where(pred_midline < 0.3, pred_midline)
-    axes[0].imshow(midline_masked, cmap="Greens", alpha=0.6, vmin=0, vmax=1)
-    axes[0].set_title("Predicted Midline")
+    # Derive QC point from predicted midline (rightmost point)
+    pred_qc_point = derive_qc_from_midline(pred_midline)
+
+    # Panel 1: Prediction -- midline + derived QC
+    _plot_midline_and_qc(axes[0], image, pred_midline, pred_qc_point)
+    qc_label = (f"QC=({pred_qc_point[0]},{pred_qc_point[1]})"
+                if pred_qc_point else "QC=N/A")
+    axes[0].set_title(f"Prediction  [{qc_label}]")
     axes[0].axis("off")
 
-    # Predicted QC overlay (masked to show only the peak region)
-    axes[1].imshow(image, cmap="gray")
-    _overlay_qc_heatmap(axes[1], pred_qc)
-    axes[1].set_title("Predicted QC")
-    axes[1].axis("off")
-
-    if gt_midline is not None and n_cols > 2:
-        axes[2].imshow(image, cmap="gray")
-        gt_mid_masked = np.ma.masked_where(gt_midline < 0.3, gt_midline)
-        axes[2].imshow(gt_mid_masked, cmap="Greens", alpha=0.5, vmin=0, vmax=1)
+    # Panel 2: Ground truth -- midline + GT QC from heatmap peak
+    if has_gt:
+        gt_qc_point = None
         if gt_qc is not None:
-            _overlay_qc_heatmap(axes[2], gt_qc)
-        axes[2].set_title("Ground Truth")
-        axes[2].axis("off")
+            peak_yx = np.unravel_index(np.argmax(gt_qc), gt_qc.shape)
+            gt_qc_point = (int(peak_yx[1]), int(peak_yx[0]))
+        _plot_midline_and_qc(axes[1], image, gt_midline, gt_qc_point)
+        gt_label = (f"QC=({gt_qc_point[0]},{gt_qc_point[1]})"
+                    if gt_qc_point else "QC=N/A")
+        axes[1].set_title(f"Ground Truth  [{gt_label}]")
+        axes[1].axis("off")
 
     if title:
         fig.suptitle(title, fontsize=11)

@@ -117,18 +117,20 @@ def predict_single(
     midline_skeleton = skeletonize(midline_binary).astype(np.uint8)
     midline_coords = extract_ordered_midline(midline_skeleton)
 
-    # Step 7: Extract QC point
-    qc_point = preprocessing.extract_qc_point(qc_raw, bbox, crop_size)
+    # Step 7: Derive QC as the rightmost point of the midline (root tip)
+    if midline_coords:
+        qc_point = max(midline_coords, key=lambda pt: pt[0])
+    else:
+        # Fallback to heatmap peak if midline is empty
+        qc_point = preprocessing.extract_qc_point(qc_raw, bbox, crop_size)
 
     return {
         "midline_mask": midline_binary,
         "midline_skeleton": midline_skeleton,
         "midline_coords": midline_coords,
         "qc_point": qc_point,
-        "qc_heatmap": qc_full,
         "bbox": bbox,
         "midline_mask_raw": midline_raw,
-        "qc_heatmap_raw": qc_raw,
     }
 
 
@@ -191,30 +193,24 @@ def save_results(
     output_path.mkdir(parents=True, exist_ok=True)
 
     # Save overlay visualization
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    fig, axes = plt.subplots(1, 2, figsize=(14, 7))
 
     # Original image
     axes[0].imshow(image, cmap="gray")
     axes[0].set_title("Original Image")
     axes[0].axis("off")
 
-    # Midline overlay
+    # Midline + QC overlay
     axes[1].imshow(image, cmap="gray")
     if result["midline_coords"]:
         coords = np.array(result["midline_coords"])
         axes[1].plot(coords[:, 0], coords[:, 1], "g-", linewidth=1.5, alpha=0.8)
     qc_x, qc_y = result["qc_point"]
-    axes[1].plot(qc_x, qc_y, "r*", markersize=15, markeredgecolor="white", markeredgewidth=0.5)
-    axes[1].set_title("Predicted Midline + QC")
+    axes[1].plot(qc_x, qc_y, "r*", markersize=16, markeredgecolor="white", markeredgewidth=0.8)
+    axes[1].set_title(f"Midline + QC ({qc_x}, {qc_y})")
     axes[1].axis("off")
 
-    # QC heatmap
-    axes[2].imshow(image, cmap="gray")
-    axes[2].imshow(result["qc_heatmap"], cmap="hot", alpha=0.5)
-    axes[2].set_title("QC Heatmap Overlay")
-    axes[2].axis("off")
-
-    plt.suptitle(f"{filename} | QC=({qc_x}, {qc_y})")
+    plt.suptitle(filename)
     plt.tight_layout()
     plt.savefig(str(output_path / f"{filename}_overlay.png"), dpi=150, bbox_inches="tight")
     plt.close()

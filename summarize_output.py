@@ -37,7 +37,7 @@ from tqdm import tqdm
 import config
 import utils
 from data_loader import create_dataloaders
-from evaluate import dice_coefficient, qc_distance_error, qc_mse
+from evaluate import dice_coefficient
 from model import build_model
 
 SUMMARY_DIR = config.PROJECT_ROOT / "summary"
@@ -103,7 +103,6 @@ def run_evaluation(
 
     all_dice = []
     all_qc_dist = []
-    all_qc_mse = []
     all_filenames = []
     vis_count = 0
 
@@ -124,12 +123,22 @@ def run_evaluation(
             fname = batch["filename"][i]
 
             d = dice_coefficient(mp, mt)
-            dist = qc_distance_error(qp, qt)
-            mse = qc_mse(qp, qt)
+
+            # Derive QC from the rightmost point of the predicted midline
+            pred_qc_pt = utils.derive_qc_from_midline(mp)
+            gt_qc_peak = np.unravel_index(np.argmax(qt), qt.shape)
+            gt_qc_pt = (int(gt_qc_peak[1]), int(gt_qc_peak[0]))
+
+            if pred_qc_pt is not None:
+                dist = float(np.sqrt(
+                    (pred_qc_pt[0] - gt_qc_pt[0]) ** 2 +
+                    (pred_qc_pt[1] - gt_qc_pt[1]) ** 2
+                ))
+            else:
+                dist = float("nan")
 
             all_dice.append(d)
             all_qc_dist.append(dist)
-            all_qc_mse.append(mse)
             all_filenames.append(fname)
 
             if vis_count < max_vis:
@@ -146,14 +155,14 @@ def run_evaluation(
                 vis_count += 1
 
     dice_arr = np.array(all_dice)
-    dist_arr = np.array(all_qc_dist)
-    mse_arr = np.array(all_qc_mse)
+    dist_arr = np.array([d for d in all_qc_dist if not np.isnan(d)])
 
     metrics = {
         "checkpoint_used": ckpt_path.name,
         "checkpoint_epoch": ckpt_epoch,
         "num_samples": len(all_dice),
         "num_visualizations": vis_count,
+        "qc_method": "rightmost midline point",
         "dice": {
             "mean": round(float(dice_arr.mean()), 4),
             "std": round(float(dice_arr.std()), 4),
@@ -161,20 +170,17 @@ def run_evaluation(
             "max": round(float(dice_arr.max()), 4),
         },
         "qc_distance_px": {
-            "mean": round(float(dist_arr.mean()), 2),
-            "std": round(float(dist_arr.std()), 2),
-            "min": round(float(dist_arr.min()), 2),
-            "max": round(float(dist_arr.max()), 2),
-            "median": round(float(np.median(dist_arr)), 2),
-        },
-        "qc_mse": {
-            "mean": round(float(mse_arr.mean()), 6),
+            "mean": round(float(dist_arr.mean()), 2) if len(dist_arr) else None,
+            "std": round(float(dist_arr.std()), 2) if len(dist_arr) else None,
+            "min": round(float(dist_arr.min()), 2) if len(dist_arr) else None,
+            "max": round(float(dist_arr.max()), 2) if len(dist_arr) else None,
+            "median": round(float(np.median(dist_arr)), 2) if len(dist_arr) else None,
         },
         "per_sample": [
             {
                 "filename": fn,
                 "dice": round(d, 4),
-                "qc_dist_px": round(qd, 2),
+                "qc_dist_px": round(qd, 2) if not np.isnan(qd) else None,
             }
             for fn, d, qd in zip(all_filenames, all_dice, all_qc_dist)
         ],
@@ -182,8 +188,12 @@ def run_evaluation(
 
     print(f"  Dice:  mean={metrics['dice']['mean']:.4f}  "
           f"min={metrics['dice']['min']:.4f}  max={metrics['dice']['max']:.4f}")
-    print(f"  QC dist: mean={metrics['qc_distance_px']['mean']:.1f}px  "
-          f"median={metrics['qc_distance_px']['median']:.1f}px")
+    qc_stats = metrics["qc_distance_px"]
+    if qc_stats["mean"] is not None:
+        print(f"  QC dist (rightmost midline pt): mean={qc_stats['mean']:.1f}px  "
+              f"median={qc_stats['median']:.1f}px")
+    else:
+        print("  QC dist: no valid midline predictions to derive QC from")
     print(f"  Saved {vis_count} prediction images")
 
     return metrics
