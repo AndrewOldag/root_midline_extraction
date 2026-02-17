@@ -41,6 +41,19 @@ from evaluate import dice_coefficient, qc_distance_error, qc_mse
 from model import build_model
 
 SUMMARY_DIR = config.PROJECT_ROOT / "summary"
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """JSON encoder that handles numpy types."""
+
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
 THUMBNAIL_DIR = SUMMARY_DIR / "thumbnails"
 PREDICTIONS_SAVE_DIR = SUMMARY_DIR / "predictions"
 THUMBNAIL_WIDTH = 400
@@ -432,7 +445,7 @@ def main(max_vis: int = 20, skip_eval: bool = False) -> None:
 
     report_path = SUMMARY_DIR / "summary_report.json"
     with open(report_path, "w") as f:
-        json.dump(report, f, indent=2)
+        json.dump(report, f, indent=2, cls=NumpyEncoder)
     print(f"  Report written to {report_path}")
 
     # Final size estimate
