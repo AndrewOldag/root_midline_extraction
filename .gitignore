@@ -1,6 +1,7 @@
 # Data
 dataset/
 output/
+!output/summary/
 
 # Python
 __pycache__/
