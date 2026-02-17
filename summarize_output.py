@@ -56,7 +56,7 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 THUMBNAIL_DIR = SUMMARY_DIR / "thumbnails"
 PREDICTIONS_SAVE_DIR = SUMMARY_DIR / "predictions"
-THUMBNAIL_WIDTH = 400
+THUMBNAIL_WIDTH = 900
 
 
 # =============================================================================
